@@ -5,8 +5,8 @@ dependencies = [
  "env_logger 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "nix 0.8.0-pre",
- "spawn-ptrace 0.1.0-pre",
+ "nix 0.8.0-pre (git+https://github.com/luser/nix?branch=ptrace-event-stop)",
+ "spawn-ptrace 0.1.0-pre (git+https://github.com/luser/spawn-ptrace)",
 ]
 
 [[package]]
@@ -89,6 +89,7 @@ dependencies = [
 [[package]]
 name = "nix"
 version = "0.8.0-pre"
+source = "git+https://github.com/luser/nix?branch=ptrace-event-stop#92a3cf77265e7402c555ab77d0ae3e3920914d36"
 dependencies = [
  "bitflags 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cfg-if 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -156,6 +157,7 @@ dependencies = [
 [[package]]
 name = "spawn-ptrace"
 version = "0.1.0-pre"
+source = "git+https://github.com/luser/spawn-ptrace#4c6bb7ce6537f04dc1aa0ee650a8a528729802a3"
 dependencies = [
  "nix 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "skeptic 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -218,6 +220,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "ab83497bf8bf4ed2a74259c1c802351fcd67a65baa86394b6ba73c36f4838054"
 "checksum memchr 0.1.11 (registry+https://github.com/rust-lang/crates.io-index)" = "d8b629fb514376c675b98c1421e80b151d3817ac42d7c667717d282761418d20"
 "checksum nix 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a0d95c5fa8b641c10ad0b8887454ebaafa3c92b5cd5350f8fc693adafd178e7b"
+"checksum nix 0.8.0-pre (git+https://github.com/luser/nix?branch=ptrace-event-stop)" = "<none>"
 "checksum pulldown-cmark 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "8361e81576d2e02643b04950e487ec172b687180da65c731c03cf336784e6c07"
 "checksum rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)" = "2791d88c6defac799c3f20d74f094ca33b9332612d9aef9078519c82e4fe04a5"
 "checksum regex 0.1.77 (registry+https://github.com/rust-lang/crates.io-index)" = "64b03446c466d35b42f2a8b203c8e03ed8b91c0f17b56e1f84f7210a257aa665"
@@ -225,6 +228,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum rustc_version 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)" = "c5f5376ea5e30ce23c03eb77cbe4962b988deead10910c372b226388b594c084"
 "checksum semver 0.1.20 (registry+https://github.com/rust-lang/crates.io-index)" = "d4f410fedcf71af0345d7607d246e7ad15faaadd49d240ee3b24e5dc21a820ac"
 "checksum skeptic 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "061203a849117b0f7090baf8157aa91dac30545208fbb85166ac58b4ca33d89c"
+"checksum spawn-ptrace 0.1.0-pre (git+https://github.com/luser/spawn-ptrace)" = "<none>"
 "checksum tempdir 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)" = "87974a6f5c1dfb344d733055601650059a3363de2a6104819293baff662132d6"
 "checksum thread-id 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a9539db560102d1cef46b8b78ce737ff0bb64e7e18d35b2a5688f7d097d0ff03"
 "checksum thread_local 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)" = "8576dbbfcaef9641452d5cf0df9b0e7eeab7694956dd33bb61515fb8f18cfdd5"
