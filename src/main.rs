@@ -19,7 +19,7 @@ use std::path::Path;
 use std::process::Command;
 use std::ptr;
 use std::str;
-use std::time::Instant;
+use std::time::{Duration,Instant};
 
 struct ProcessInfo {
     pub children: Vec<pid_t>,
@@ -47,6 +47,10 @@ fn continue_process(pid: pid_t) -> nix::Result<c_long> {
 //TODO: enumerate in proper order
 fn enumerate_pids<'a>(_start_pid: pid_t, pids: &'a HashMap<pid_t, ProcessInfo>) -> Box<Iterator<Item=(&'a pid_t, &'a ProcessInfo)> + 'a> {
     Box::new(pids.iter())
+}
+
+fn fmt_duration(duration: Duration) -> String {
+    format!("{}.{:03}s", duration.as_secs(), duration.subsec_nanos() / 1000)
 }
 
 fn main() {
@@ -118,13 +122,14 @@ fn main() {
             Err(e) => panic!("ptrace error: {:?}", e),
         }
     }
-    let elapsed = Instant::now() - pids.get(&pid).unwrap().started;
+    let elapsed = pids.get(&pid).unwrap().started.elapsed();
     trace!("Done: total time: {}.{:03}s", elapsed.as_secs(), elapsed.subsec_nanos() / 1000);
     for (pid, info) in enumerate_pids(pid, &pids) {
-        let p = Path::new(&info.cmdline[0])
-            .file_name()
-            .map(|s| s.to_string_lossy())
+        let p = info.cmdline.first()
+            .and_then(|b| Path::new(b)
+                      .file_name()
+                      .map(|s| s.to_string_lossy()))
             .unwrap_or(Cow::Borrowed("<unknown>"));
-        println!("{}: {}", pid, p);
+        println!("{}: {} [{}]", pid, p, info.ended.map(|e| fmt_duration(e - info.started)).unwrap_or("?".to_owned()));
     }
 }
