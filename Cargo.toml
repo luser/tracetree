@@ -5,7 +5,8 @@ authors = ["Ted Mielczarek <ted@mielczarek.org>"]
 
 [dependencies]
 env_logger = "0.3.5"
+indextree = "1.0.1"
 libc = "0.2.15"
 log = "0.3.6"
 nix = { git = "https://github.com/luser/nix", branch = "ptrace-event-stop" }
-spawn-ptrace = { git = "https://github.com/luser/spawn-ptrace" }
+spawn-ptrace = "0.1"
