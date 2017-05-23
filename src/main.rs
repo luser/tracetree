@@ -9,15 +9,18 @@ use indextree::{Arena, NodeEdge, NodeId};
 use libc::{c_long, pid_t};
 use nix::c_void;
 use nix::sys::ptrace::{ptrace, ptrace_setoptions};
-use nix::sys::ptrace::ptrace::{PTRACE_O_TRACECLONE, PTRACE_O_TRACEEXEC, PTRACE_O_TRACEFORK, PTRACE_O_TRACEVFORK, PTRACE_GETEVENTMSG, PTRACE_CONT};
+use nix::sys::ptrace::ptrace::{PTRACE_EVENT_FORK, PTRACE_EVENT_VFORK, PTRACE_EVENT_CLONE,
+                               PTRACE_EVENT_EXEC};
+use nix::sys::ptrace::ptrace::{PTRACE_O_TRACECLONE, PTRACE_O_TRACEEXEC, PTRACE_O_TRACEFORK,
+                               PTRACE_O_TRACEVFORK, PTRACE_GETEVENTMSG, PTRACE_CONT};
 use nix::sys::signal;
-use nix::sys::wait::{waitpid, WaitStatus, PtraceEvent};
+use nix::sys::wait::{waitpid, WaitStatus};
 use spawn_ptrace::CommandPtraceSpawn;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
-use std::io::Read;
+use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::Command;
 use std::ptr;
@@ -104,11 +107,18 @@ fn main() {
     let sig_action = signal::SigAction::new(signal::SigHandler::Handler(handle_signal),
                                             signal::SaFlags::empty(),
                                             signal::SigSet::empty());
-    unsafe { signal::sigaction(signal::SIGUSR1, &sig_action).unwrap(); }
+    unsafe {
+        signal::sigaction(signal::SIGUSR1, &sig_action).expect("Failed to install signal handler!");
+    }
 
     trace!("This pid: {}", nix::unistd::getpid());
     let args = env::args().skip(1).collect::<Vec<_>>();
-    let child = Command::new(&args[0]).args(&args[1..]).spawn_ptrace().unwrap();
+    if args.len() == 0 {
+        drop(writeln!(io::stderr(), "Usage: tracetree command"));
+        ::std::process::exit(1);
+    }
+    let child = Command::new(&args[0]).args(&args[1..]).spawn_ptrace()
+        .expect("Failed to spawn process");
     let pid = child.id() as pid_t;
     trace!("Spawned process {}", pid);
     // Setup our ptrace options
@@ -128,14 +138,20 @@ fn main() {
                 let node = get_or_insert_pid(pid, arena, &mut pids);
                 arena[node].data.ended = Some(Instant::now());
             }
-            Ok(WaitStatus::StoppedPtraceEvent(pid, event)) => {
+            Ok(WaitStatus::PtraceEvent(pid, _sig, event)) => {
                 match event {
-                    PtraceEvent::Fork | PtraceEvent::Vfork | PtraceEvent::Clone => {
+                    PTRACE_EVENT_FORK | PTRACE_EVENT_VFORK | PTRACE_EVENT_CLONE => {
                         let mut new_pid: pid_t = 0;
                         ptrace(PTRACE_GETEVENTMSG, pid, ptr::null_mut(),
                                &mut new_pid as *mut pid_t as *mut c_void)
                             .expect("Failed to get pid of forked process");
-                        trace!("[{}] {:?} new process {}", pid, event, new_pid);
+                        let name = match event {
+                            PTRACE_EVENT_FORK => "fork",
+                            PTRACE_EVENT_VFORK => "vfork",
+                            PTRACE_EVENT_CLONE => "clone",
+                            _ => unreachable!(),
+                        };
+                        trace!("[{}] {} new process {}", pid, name, new_pid);
                         match pids.get(&pid) {
                             Some(&parent) => {
                                 let cmdline = arena[parent].data.cmdline[..1].to_vec();
@@ -147,7 +163,7 @@ fn main() {
                                            pid),
                         }
                     }
-                    PtraceEvent::Exec => {
+                    PTRACE_EVENT_EXEC => {
                         let mut buf = vec!();
                         match pids.get(&pid) {
                             Some(&node) => {

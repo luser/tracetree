@@ -2,11 +2,12 @@
 name = "tracetree"
 version = "0.1.0"
 authors = ["Ted Mielczarek <ted@mielczarek.org>"]
+license = "MIT"
 
 [dependencies]
 env_logger = "0.3.5"
 indextree = "1.0.1"
-libc = "0.2.15"
+libc = "0.2.21"
 log = "0.3.6"
-nix = { git = "https://github.com/luser/nix", branch = "ptrace-event-stop" }
+nix = "0.8.1"
 spawn-ptrace = "0.1"
