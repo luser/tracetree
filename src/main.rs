@@ -2,6 +2,7 @@
 extern crate env_logger;
 extern crate libc;
 extern crate nix;
+extern crate serde_json;
 extern crate tracetree;
 
 use nix::sys::signal;
@@ -77,4 +78,6 @@ fn main() {
     let tree = ProcessTree::spawn(cmd, &args)
         .expect("Failed to spawn process");
     print_process_tree(&tree, |_| true);
+    //let stdout = io::stdout();
+    //serde_json::to_writer(stdout.lock(), &tree).expect("Failed to serialize process tree");
 }
