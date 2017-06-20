@@ -5,6 +5,7 @@ authors = ["Ted Mielczarek <ted@mielczarek.org>"]
 license = "MIT"
 
 [dependencies]
+clap = "2.25.0"
 env_logger = "0.3.5"
 error-chain = "0.10.0"
 indextree = "1.0.1"

@@ -212,7 +212,7 @@ impl<'a> Iterator for Traverse<'a> {
 }
 
 fn duration_to_secs(d: Duration) -> f64 {
-    d.as_secs() as f64 + (d.subsec_nanos() as f64) / 1000_000.0
+    d.as_secs() as f64 + (d.subsec_nanos() as f64) / 1_000_000_000.0
 }
 
 struct ProcessInfoSerializable<'a>(NodeId, &'a Arena<ProcessInfo>, Instant);

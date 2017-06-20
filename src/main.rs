@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate clap;
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate libc;
@@ -5,9 +7,10 @@ extern crate nix;
 extern crate serde_json;
 extern crate tracetree;
 
+use clap::{Arg, App, AppSettings};
 use nix::sys::signal;
 use std::borrow::Cow;
-use std::env;
+use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
 use std::process::Command;
@@ -57,6 +60,15 @@ fn print_process_tree<F>(tree: &ProcessTree, filter: F)
     }
 }
 
+arg_enum!{
+    #[derive(Debug)]
+    #[allow(non_camel_case_types)]
+    pub enum OutputFormat {
+        text,
+        json
+    }
+}
+
 fn main() {
     env_logger::init().unwrap();
 
@@ -68,16 +80,43 @@ fn main() {
     }
 
     trace!("This pid: {}", nix::unistd::getpid());
-    let args = env::args().skip(1).collect::<Vec<_>>();
-    if args.len() == 0 {
-        drop(writeln!(io::stderr(), "Usage: tracetree command"));
-        ::std::process::exit(1);
-    }
+
+    let matches = App::new(env!("CARGO_PKG_NAME"))
+        .version(env!("CARGO_PKG_VERSION"))
+        .setting(AppSettings::TrailingVarArg)
+        .arg(Arg::with_name("out")
+             .short("o")
+             .long("out")
+             .value_name("OUTPUT")
+             .help("Write output to this file")
+             .takes_value(true))
+        .arg(Arg::with_name("format")
+             .short("f")
+             .long("format")
+             .value_name("FORMAT")
+             .help("Output format")
+             .possible_values(&OutputFormat::variants())
+             .default_value("text"))
+        .arg(Arg::with_name("cmd")
+             .help("Command to run")
+             .multiple(true)
+             .required(true)
+             .use_delimiter(false))
+        .get_matches();
+
+    let args = matches.values_of("cmd").unwrap().collect::<Vec<_>>();
+    let fmt = value_t_or_exit!(matches, "format", OutputFormat);
     let mut cmd = Command::new(&args[0]);
     cmd.args(&args[1..]);
     let tree = ProcessTree::spawn(cmd, &args)
         .expect("Failed to spawn process");
-    print_process_tree(&tree, |_| true);
-    //let stdout = io::stdout();
-    //serde_json::to_writer(stdout.lock(), &tree).expect("Failed to serialize process tree");
+    let stdout = io::stdout();
+    let out: Box<Write> = matches.value_of_os("out")
+        .and_then(|o| File::create(o).map(|f| Box::new(f) as Box<Write>).ok())
+        .unwrap_or_else(|| Box::new(stdout.lock()) as Box<Write>);
+    match fmt {
+        OutputFormat::text => print_process_tree(&tree, |_| true),
+        OutputFormat::json => serde_json::to_writer(out, &tree)
+            .expect("Failed to serialize process tree"),
+    }
 }
