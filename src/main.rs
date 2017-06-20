@@ -1,32 +1,19 @@
 #[macro_use] extern crate log;
 extern crate env_logger;
-extern crate indextree;
 extern crate libc;
 extern crate nix;
-extern crate spawn_ptrace;
+extern crate tracetree;
 
-use indextree::{Arena, NodeEdge, NodeId};
-use libc::{c_long, pid_t};
-use nix::c_void;
-use nix::sys::ptrace::{ptrace, ptrace_setoptions};
-use nix::sys::ptrace::ptrace::{PTRACE_EVENT_FORK, PTRACE_EVENT_VFORK, PTRACE_EVENT_CLONE,
-                               PTRACE_EVENT_EXEC};
-use nix::sys::ptrace::ptrace::{PTRACE_O_TRACECLONE, PTRACE_O_TRACEEXEC, PTRACE_O_TRACEFORK,
-                               PTRACE_O_TRACEVFORK, PTRACE_GETEVENTMSG, PTRACE_CONT};
 use nix::sys::signal;
-use nix::sys::wait::{waitpid, WaitStatus};
-use spawn_ptrace::CommandPtraceSpawn;
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::env;
-use std::fs::File;
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::path::Path;
 use std::process::Command;
-use std::ptr;
 use std::str;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
-use std::time::{Duration,Instant};
+use std::time::Duration;
+use tracetree::{NodeEdge, ProcessInfo, ProcessTree};
 
 static SIGNAL_DELIVERED: AtomicBool = ATOMIC_BOOL_INIT;
 
@@ -34,49 +21,17 @@ extern fn handle_signal(_:i32) {
     SIGNAL_DELIVERED.store(true, Ordering::Relaxed);
 }
 
-struct ProcessInfo {
-    pub pid: pid_t,
-    pub started: Instant,
-    // None if still alive.
-    pub ended: Option<Instant>,
-    pub cmdline: Vec<String>,
-}
-
-impl Default for ProcessInfo {
-    fn default() -> ProcessInfo {
-        ProcessInfo {
-            pid: 0,
-            started: Instant::now(),
-            ended: None,
-            cmdline: vec!(),
-        }
-    }
-}
-
-fn continue_process(pid: pid_t, signal: Option<signal::Signal>) -> nix::Result<c_long> {
-    let data = signal.map(|s| s as i32 as *mut c_void).unwrap_or(ptr::null_mut());
-    ptrace(PTRACE_CONT, pid, ptr::null_mut(), data)
-}
-
 fn fmt_duration(duration: Duration) -> String {
     format!("{}.{:03}s", duration.as_secs(), duration.subsec_nanos() / 1000_000)
 }
 
-fn get_or_insert_pid(pid: pid_t, arena: &mut Arena<ProcessInfo>, map: &mut HashMap<pid_t, NodeId>) -> NodeId {
-    *map.entry(pid).or_insert_with(|| {
-        arena.new_node(ProcessInfo { pid: pid, .. ProcessInfo::default() })
-    })
-}
-
-fn print_process_tree<F>(root: NodeId, arena: &mut Arena<ProcessInfo>,
-                         filter: F)
+fn print_process_tree<F>(tree: &ProcessTree, filter: F)
     where F: Fn(&ProcessInfo) -> bool,
 {
     let mut depth = 0;
-    for i in root.traverse(arena) {
+    for i in tree.traverse() {
         match i {
-            NodeEdge::Start(node) => {
-                let info = &arena[node].data;
+            NodeEdge::Start(info) => {
                 if filter(info) {
                     let p = info.cmdline.first()
                         .and_then(|b| Path::new(b)
@@ -117,98 +72,9 @@ fn main() {
         drop(writeln!(io::stderr(), "Usage: tracetree command"));
         ::std::process::exit(1);
     }
-    let child = Command::new(&args[0]).args(&args[1..]).spawn_ptrace()
+    let mut cmd = Command::new(&args[0]);
+    cmd.args(&args[1..]);
+    let tree = ProcessTree::spawn(cmd, &args)
         .expect("Failed to spawn process");
-    let pid = child.id() as pid_t;
-    trace!("Spawned process {}", pid);
-    // Setup our ptrace options
-    ptrace_setoptions(pid, PTRACE_O_TRACEEXEC | PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK | PTRACE_O_TRACECLONE).expect("Failed to set ptrace options");
-    let arena = &mut Arena::new();
-    let mut pids: HashMap<pid_t, NodeId> = HashMap::new();
-    let root = get_or_insert_pid(pid, arena, &mut pids);
-    arena[root].data.cmdline = args;
-    continue_process(pid, None).expect("Error continuing process");
-    loop {
-        if !root.descendants(arena).any(|node| arena[node].data.ended.is_none()) {
-            break
-        }
-        match waitpid(-1, None) {
-            Ok(WaitStatus::Exited(pid, ret)) => {
-                trace!("Process {} exited with status {}", pid, ret);
-                let node = get_or_insert_pid(pid, arena, &mut pids);
-                arena[node].data.ended = Some(Instant::now());
-            }
-            Ok(WaitStatus::PtraceEvent(pid, _sig, event)) => {
-                match event {
-                    PTRACE_EVENT_FORK | PTRACE_EVENT_VFORK | PTRACE_EVENT_CLONE => {
-                        let mut new_pid: pid_t = 0;
-                        ptrace(PTRACE_GETEVENTMSG, pid, ptr::null_mut(),
-                               &mut new_pid as *mut pid_t as *mut c_void)
-                            .expect("Failed to get pid of forked process");
-                        let name = match event {
-                            PTRACE_EVENT_FORK => "fork",
-                            PTRACE_EVENT_VFORK => "vfork",
-                            PTRACE_EVENT_CLONE => "clone",
-                            _ => unreachable!(),
-                        };
-                        trace!("[{}] {} new process {}", pid, name, new_pid);
-                        match pids.get(&pid) {
-                            Some(&parent) => {
-                                let cmdline = arena[parent].data.cmdline[..1].to_vec();
-                                let child = get_or_insert_pid(new_pid, arena, &mut pids);
-                                arena[child].data.cmdline = cmdline;
-                                parent.append(child, arena);
-                            }
-                            None => panic!("Got an {:?} event for unknown parent pid {}", event,
-                                           pid),
-                        }
-                    }
-                    PTRACE_EVENT_EXEC => {
-                        let mut buf = vec!();
-                        match pids.get(&pid) {
-                            Some(&node) => {
-                                File::open(format!("/proc/{}/cmdline", pid))
-                                    .and_then(|mut f| f.read_to_end(&mut buf))
-                                    .and_then(|_| {
-                                        let mut cmdline = buf.split(|&b| b == 0).map(|bytes| String::from_utf8_lossy(bytes).into_owned()).collect::<Vec<_>>();
-                                        cmdline.pop();
-                                        debug!("[{}] exec {:?}", pid, cmdline);
-                                        arena[node].data.cmdline = cmdline;
-                                        Ok(())
-                                    })
-                                    .expect("Couldn't read cmdline");
-                            }
-                            None => panic!("Got an exec event for unknown pid {}", pid),
-                        }
-                    }
-                    _ => panic!("Unexpected ptrace event: {:?}", event),
-                }
-                continue_process(pid, None).expect("Error continuing process");
-            }
-            Ok(WaitStatus::Stopped(pid, sig)) => {
-                trace!("[{}] stopped with {:?}", pid, sig);
-                // Sometimes we get the SIGSTOP+exit from a child before we get the clone
-                // stop from the parent, so insert any unknown pids here so we have a better
-                // approximation of the process start time.
-                get_or_insert_pid(pid, arena, &mut pids);
-                let continue_sig = if sig == signal::Signal::SIGSTOP { None } else { Some(sig) };
-                continue_process(pid, continue_sig).expect("Error continuing process");
-            }
-            Ok(s) => panic!("Unexpected status: {:?}", s),
-            Err(e) => {
-                match e {
-                    nix::Error::Sys(nix::Errno::EINTR) => {
-                        if SIGNAL_DELIVERED.swap(false, Ordering::Relaxed) {
-                            println!("Active processes:");
-                            print_process_tree(root, arena, |info| info.ended.is_none());
-                        }
-                    }
-                    _ => panic!("ptrace error: {:?}", e),
-                }
-            }
-        }
-    }
-    let elapsed = arena[root].data.started.elapsed();
-    trace!("Done: total time: {}", fmt_duration(elapsed));
-    print_process_tree(root, arena, |_| true);
+    print_process_tree(&tree, |_| true);
 }

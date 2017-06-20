@@ -6,6 +6,7 @@ license = "MIT"
 
 [dependencies]
 env_logger = "0.3.5"
+error-chain = "0.10.0"
 indextree = "1.0.1"
 libc = "0.2.21"
 log = "0.3.6"
