@@ -4,15 +4,34 @@ os:
 - linux
 
 rust:
-  - nightly
-  - beta
-  - stable
+- nightly
+- beta
+- stable
 
 script:
-  - |
-      cargo build -v &&
-      cargo test -v
+- |
+  if [[ -n "$TRAVIS_TAG" && "$TRAVIS_RUST_VERSION" = "stable" ]]; then
+    rustup target add x86_64-unknown-linux-musl &&
+    cargo build --release --target x86_64-unknown-linux-musl &&
+  else
+    cargo build -v &&
+    cargo test -v
+  fi
+
+before_deploy:
+  - strip target/release/x86_64-unknown-linux-musl/tracetree
+  - tar czvf tracetree-$TRAVIS_TAG-linux-x86_64.tar.gz target/release/x86_64-unknown-linux-musl/tracetree
 
 env:
   global:
-    - RUST_BACKTRACE=1
+  - RUST_BACKTRACE=1
+deploy:
+  provider: releases
+  api_key:
+    secure: kImz2Be7NJAjGofluPUZGAB/fG/fscr+0kr9KVQLqY36qx4+tueLk9+WrzVXqkWS+a1V0MwHgTpu0wTbXYPcpeDWkonKgihgb3LTTAsYcs4GRPV/u3dvNFJDYnrn96Sk81ysD6nq3PZSx7RVT8rqIkP30Sh1jovrq0iOBOuABKqPujRi/Wozc15Y5wPxgHAXcZpdKmeZpG46rIEM2+PFZxEV2mdHEQSIhy/Q7vmDea4UJGdKiXmUvrtTuFzBcHZ0ZEZu59vzZuwrZS2Kie05hj405M1ITe6eNwaNbvY+9Li+8vymbepOEIpXCpwyGr49ELimPz6FNU+Fi6kPORMgjoIll5og4XRaYq8gsJ69Ie64CC8QXYDrAaY5kHLKrMg46HMHmQoYdUgjwnAaTFpxhwAOwD+Ya5tHlOr4Yb+JQVVGNgQeDfSOZCyIzwu0Wwfugu60bBH548ZIj3ibnkyPFPxIrcekAxwP8PyC8oIxQ04DXQ3KSkZErD6syWcPw2dWtQZzGG6LRRT5fn3bJm53ugfi1pz6/e4n486qGzacJVekyHJWaxdA3oZjXsQVTcGjvkiYMr+wWAj5HhZwVWskCReefKRHw6NR5YYg7nVg2WhP5qrwcB6Nc7XFuiOU3koslUnT40pAnya33IwhFAQBQzWh/G0gFOzHmfhlMjr/N+g=
+  file: tracetree-$TRAVIS_TAG-linux-x86_64.tar.gz
+  on:
+    repo: luser/tracetree
+    condition: $TRAVIS_RUST_VERSION = "stable"
+    tags: true
+  skip_cleanup: true

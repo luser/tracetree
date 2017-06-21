@@ -102,6 +102,7 @@ fn main() {
              .multiple(true)
              .required(true)
              .use_delimiter(false))
+        .after_help("You can visualize the JSON output with this web viewer: https://luser.github.io/tracetree/")
         .get_matches();
 
     let args = matches.values_of("cmd").unwrap().collect::<Vec<_>>();

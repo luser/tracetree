@@ -1,8 +1,13 @@
 [package]
 name = "tracetree"
-version = "0.1.0"
+version = "0.1.0-pre"
 authors = ["Ted Mielczarek <ted@mielczarek.org>"]
 license = "MIT"
+description = "Trace the execution of an entire process tree."
+repository = "https://github.com/luser/tracetree/"
+readme = "README.md"
+categories = ["command-line-utilities"]
+keywords = ["ptrace"]
 
 [dependencies]
 chrono = { version = "0.3", features = ["serde"] }
