@@ -1,3 +1,4 @@
+extern crate chrono;
 #[macro_use] extern crate log;
 #[macro_use]
 extern crate error_chain;
@@ -10,6 +11,8 @@ extern crate spawn_ptrace;
 mod errors;
 
 pub use errors::*;
+
+use chrono::{Duration, Local, DateTime};
 use indextree::{Arena, NodeId};
 pub use indextree::NodeEdge;
 use libc::{c_long, pid_t};
@@ -29,7 +32,7 @@ use std::fs::File;
 use std::io::Read;
 use std::process::Command;
 use std::ptr;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// Information about a spawned process.
 pub struct ProcessInfo {
@@ -59,6 +62,7 @@ pub struct ProcessTree {
     arena: Arena<ProcessInfo>,
     pids: HashMap<pid_t, NodeId>,
     root: NodeId,
+    started: DateTime<Local>,
 }
 
 impl ProcessTree {
@@ -67,6 +71,7 @@ impl ProcessTree {
     pub fn spawn<T>(mut cmd: Command, cmdline: &[T]) -> Result<ProcessTree>
         where T: AsRef<str>
     {
+        let started = Local::now();
         let child = cmd.spawn_ptrace().chain_err(|| "Error spawning process")?;
         let pid = child.id() as pid_t;
         trace!("Spawned process {}", pid);
@@ -170,6 +175,7 @@ impl ProcessTree {
             arena: arena,
             pids: pids,
             root: root,
+            started: started,
         })
     }
 
@@ -211,12 +217,13 @@ impl<'a> Iterator for Traverse<'a> {
     }
 }
 
-fn duration_to_secs(d: Duration) -> f64 {
-    d.as_secs() as f64 + (d.subsec_nanos() as f64) / 1_000_000_000.0
-}
+struct ProcessInfoSerializable<'a>(NodeId, &'a Arena<ProcessInfo>, Instant, DateTime<Local>);
+struct ChildrenSerializable<'a>(NodeId, &'a Arena<ProcessInfo>, Instant, DateTime<Local>);
 
-struct ProcessInfoSerializable<'a>(NodeId, &'a Arena<ProcessInfo>, Instant);
-struct ChildrenSerializable<'a>(NodeId, &'a Arena<ProcessInfo>, Instant);
+fn dt(a: Instant, b: Instant, c: DateTime<Local>) -> String {
+    let d = c + Duration::from_std(a - b).unwrap();
+    d.to_rfc3339()
+}
 
 impl<'a> Serialize for ProcessInfoSerializable<'a> {
     fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
@@ -226,11 +233,11 @@ impl<'a> Serialize for ProcessInfoSerializable<'a> {
         {
             let info = &self.1[self.0].data;
             state.serialize_field("pid", &info.pid)?;
-            state.serialize_field("started", &duration_to_secs(info.started - self.2))?;
-            state.serialize_field("ended", &info.ended.map(|i| duration_to_secs(i - self.2)))?;
+            state.serialize_field("started", &dt(info.started, self.2, self.3))?;
+            state.serialize_field("ended", &info.ended.map(|i| dt(i, self.2, self.3)))?;
             state.serialize_field("cmdline", &info.cmdline)?;
         }
-        state.serialize_field("children", &ChildrenSerializable(self.0, self.1, self.2))?;
+        state.serialize_field("children", &ChildrenSerializable(self.0, self.1, self.2, self.3))?;
         state.end()
     }
 }
@@ -242,7 +249,7 @@ impl<'a> Serialize for ChildrenSerializable<'a> {
         let len = self.0.children(self.1).count();
         let mut seq = serializer.serialize_seq(Some(len))?;
         for c in self.0.children(self.1) {
-            seq.serialize_element(&ProcessInfoSerializable(c, self.1, self.2))?;
+            seq.serialize_element(&ProcessInfoSerializable(c, self.1, self.2, self.3))?;
         }
         seq.end()
     }
@@ -253,7 +260,7 @@ impl Serialize for ProcessTree {
         where S: Serializer
     {
         let started = self.arena[self.root].data.started;
-        let root_pi = ProcessInfoSerializable(self.root, &self.arena, started);
+        let root_pi = ProcessInfoSerializable(self.root, &self.arena, started, self.started);
         root_pi.serialize(serializer)
     }
 }
