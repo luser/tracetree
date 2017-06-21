@@ -7,7 +7,7 @@ dist: trusty
 addons:
   apt:
     packages:
-- musl-tools
+      - musl-tools
 
 rust:
 - nightly
