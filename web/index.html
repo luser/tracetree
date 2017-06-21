@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>tracetree chart generator</title>
+    <script type="text/javascript" src="chart.js"></script>
+    <style type="text/css">
+      html, body {
+        height: 100%;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+      .table-wrapper {
+        flex: 1;
+        width: 100%;
+      }
+      .bar {
+        position: relative;
+        background-color: blue;
+        height: 2ex;
+      }
+      th {
+        text-align: left;
+      }
+      #chart {
+        table-layout: fixed;
+        width: 100%;
+      }
+      #program {
+        width: 8em;
+      }
+      #panel {
+        display: none;
+        position: absolute;
+        width: 30em;
+        height: auto;
+        border: 2px solid black;
+        background: white;
+        overflow: scroll;
+      }
+      #panel td {
+        vertical-align: top;
+      }
+    </style>
+  </head>
+  <body>
+    <div><label for="input">Select a tracetree JSON file: </label><input id="input" type="file"> <button id="demo">Load sample data</button></div>
+    <div class="table-wrapper">
+    <table id="chart">
+      <thead>
+        <tr><th id="program">Program</th><th id="execution">Time</th></tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+    </div>
+    <div id="panel">
+      <table>
+        <tr><td>PID:</td><td id="panel-pid"></td></tr>
+        <tr><td>Commandline:</td><td id="panel-cmdline"></td></tr>
+        <tr><td>Start time:</td><td id="panel-startpretty"></td></tr>
+        <tr><td>End time:</td><td id="panel-endpretty"></td></tr>
+        <tr><td>Total time:</td><td id="panel-elapsed"></td></tr>
+      </table>
+    </div>
+  </body>
+</html>
