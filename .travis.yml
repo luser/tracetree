@@ -14,21 +14,26 @@ rust:
 - beta
 - stable
 
+matrix:
+  include:
+    - rust: stable
+    - env: TARGET=x86_64-unknown-linux-musl DEPLOY=1
+
 cache: cargo
 
 script:
 - |
-  if [[ -n "$TRAVIS_TAG" && "$TRAVIS_RUST_VERSION" = "stable" ]]; then
-    rustup target add x86_64-unknown-linux-musl &&
-    cargo build --release --target x86_64-unknown-linux-musl
+  if [[ "$DEPLOY" = 1 ]]; then
+    rustup target add $TARGET &&
+    cargo build --release --target $TARGET
   else
     cargo build -v &&
     cargo test -v
   fi
 
 before_deploy:
-  - strip target/release/x86_64-unknown-linux-musl/tracetree
-  - tar czvf tracetree-$TRAVIS_TAG-linux-x86_64.tar.gz target/release/x86_64-unknown-linux-musl/tracetree
+  - strip target/$TARGET/release/tracetree
+  - cd target/$TARGET/release/ && tar czvf ../../../tracetree-$TRAVIS_TAG-$TARGET.tar.gz tracetree
 
 env:
   global:
@@ -40,6 +45,6 @@ deploy:
   file: tracetree-$TRAVIS_TAG-linux-x86_64.tar.gz
   on:
     repo: luser/tracetree
-    condition: $TRAVIS_RUST_VERSION = "stable"
+    condition: $DEPLOY = 1
     tags: true
   skip_cleanup: true
