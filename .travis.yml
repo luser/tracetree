@@ -2,6 +2,12 @@ language: rust
 sudo: false
 os:
 - linux
+dist: trusty
+
+addons:
+  apt:
+    packages:
+- musl-tools
 
 rust:
 - nightly
