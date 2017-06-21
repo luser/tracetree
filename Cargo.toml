@@ -1,6 +1,6 @@
 [package]
 name = "tracetree"
-version = "0.1.1-pre"
+version = "0.1.1"
 authors = ["Ted Mielczarek <ted@mielczarek.org>"]
 license = "MIT"
 description = "Trace the execution of an entire process tree."
