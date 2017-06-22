@@ -10,14 +10,16 @@ addons:
       - musl-tools
 
 rust:
-- nightly
-- beta
 - stable
+- beta
+- nightly
 
+
+# Add a release build.
 matrix:
   include:
     - rust: stable
-    - env: TARGET=x86_64-unknown-linux-musl DEPLOY=1
+      env: TARGET=x86_64-unknown-linux-musl DEPLOY=1
 
 cache: cargo
 
