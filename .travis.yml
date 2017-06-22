@@ -35,8 +35,8 @@ script:
 
 before_deploy:
   - strip target/$TARGET/release/tracetree
-  - cd target/$TARGET/release/ && tar czvf $TRAVIS_BUILD_DIR/tracetree-$TRAVIS_TAG-$TARGET.tar.gz tracetree
-  - ls -l $TRAVIS_BUILD_DIR/tracetree-$TRAVIS_TAG-$TARGET.tar.gz
+  - tar czvf tracetree-$TRAVIS_TAG-$TARGET.tar.gz -C target/$TARGET/release/ tracetree
+  - ls -l tracetree-$TRAVIS_TAG-$TARGET.tar.gz
 
 env:
   global:
