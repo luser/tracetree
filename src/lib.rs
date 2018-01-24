@@ -92,6 +92,11 @@ impl ProcessTree {
                     let node = get_or_insert_pid(pid, &mut arena, &mut pids);
                     arena[node].data.ended = Some(Instant::now());
                 }
+                Ok(WaitStatus::Signaled(pid, sig, _)) => {
+                    trace!("Process {} exited with signal {:?}", pid, sig);
+                    let node = get_or_insert_pid(pid, &mut arena, &mut pids);
+                    arena[node].data.ended = Some(Instant::now());
+                }
                 Ok(WaitStatus::PtraceEvent(pid, _sig, event)) => {
                     match event {
                         PTRACE_EVENT_FORK | PTRACE_EVENT_VFORK | PTRACE_EVENT_CLONE => {
