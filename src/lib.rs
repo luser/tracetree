@@ -44,6 +44,8 @@ pub struct ProcessInfo {
     pub ended: Option<Instant>,
     /// The commandline with which this process was executed.
     pub cmdline: Vec<String>,
+    /// The working directory where the command was invoked.
+    pub cwd: Option<String>,
 }
 
 impl Default for ProcessInfo {
@@ -53,6 +55,7 @@ impl Default for ProcessInfo {
             started: Instant::now(),
             ended: None,
             cmdline: vec!(),
+            cwd: None,
         }
     }
 }
@@ -81,6 +84,7 @@ impl ProcessTree {
         let mut pids = HashMap::new();
         let root = get_or_insert_pid(pid, &mut arena, &mut pids);
         arena[root].data.cmdline = cmdline.iter().map(|s| s.as_ref().to_string()).collect();
+        arena[root].data.cwd = get_cwd(pid);
         continue_process(pid, None).chain_err(|| "Error continuing process")?;
         loop {
             if !root.descendants(&arena).any(|node| arena[node].data.ended.is_none()) {
@@ -123,6 +127,7 @@ impl ProcessTree {
                                     };
                                     let child = get_or_insert_pid(new_pid, &mut arena, &mut pids);
                                     arena[child].data.cmdline = cmdline;
+                                    arena[child].data.cwd = get_cwd(new_pid);
                                     parent.append(child, &mut arena);
                                 }
                                 None => bail!("Got an {:?} event for unknown parent pid {}", event,
@@ -241,6 +246,7 @@ impl<'a> Serialize for ProcessInfoSerializable<'a> {
             state.serialize_field("started", &dt(info.started, self.2, self.3))?;
             state.serialize_field("ended", &info.ended.map(|i| dt(i, self.2, self.3)))?;
             state.serialize_field("cmdline", &info.cmdline)?;
+            state.serialize_field("cwd", &info.cwd)?;
         }
         state.serialize_field("children", &ChildrenSerializable(self.0, self.1, self.2, self.3))?;
         state.end()
@@ -279,4 +285,14 @@ fn get_or_insert_pid(pid: pid_t, arena: &mut Arena<ProcessInfo>, map: &mut HashM
 fn continue_process(pid: pid_t, signal: Option<signal::Signal>) -> nix::Result<c_long> {
     let data = signal.map(|s| s as i32 as *mut c_void).unwrap_or(ptr::null_mut());
     ptrace(PTRACE_CONT, pid, ptr::null_mut(), data)
+}
+
+fn get_cwd(pid: i32) -> Option<String> {
+    let txt = format!("/proc/{}/cwd", pid);
+    let path = std::path::Path::new(&txt);
+    let abspath = std::fs::canonicalize(path);
+    match abspath {
+        Ok(abspath) => abspath.into_os_string().into_string().ok(),
+        _ => None,
+    }
 }
